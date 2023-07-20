@@ -18,9 +18,18 @@ suspend inline fun <reified T : Packet> BoundDatagramSocket.send(
   .let { ByteReadPacket(it) }
   .let { send(Datagram(it, address.inet)) }
 
-suspend inline fun <reified T : Packet> PlayerGroup.replicate(
-  packet: T,
-  socket: BoundDatagramSocket
-) = players
-  .filterNot { it.host }
-  .forEach { socket.send(packet, it.address) }
+/** Sends the given [packet] to all player clients */
+context(BoundDatagramSocket)
+suspend inline fun <reified T : Packet> PlayerGroup.sendToAll(packet: T) =
+  players.forEach { send(packet, it.address) }
+
+/** Sends the given [packet] to all player clients excluding the host */
+context(BoundDatagramSocket)
+suspend inline fun <reified T : Packet> PlayerGroup.sendToClients(packet: T) =
+  players.filterNot { it.host }.forEach { send(packet, it.address) }
+
+/** Sends the given [packet] to the group host */
+context(BoundDatagramSocket)
+suspend inline fun <reified T : Packet> PlayerGroup.sendToHost(packet: T) =
+  send(packet, players.first { it.host }.address)
+

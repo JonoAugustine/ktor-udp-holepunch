@@ -42,7 +42,9 @@ data class Address(val ip: String, val port: Int) {
 
   companion object {
 
-    val relayServerAddress = Address("127.0.0.1", 7001)
+    val RelayServerLocal = Address("0.0.0.0", 7001)
+    val RelayServerRemote = Address("127.0.0.1", 7001)
+    fun local(port: Int): Address = Address("localhost", port)
   }
 }
 
@@ -97,9 +99,3 @@ data class GroupPacket(val group: PlayerGroup) : ResponsePacket
 
 fun String.toPacketOrNull(): Packet? =
   runCatching { JsonConfig.decodeFromString<Packet>(this) }.getOrNull()
-
-fun String.asRequestOrNull(): RequestPacket? =
-  JsonConfig.decodeFromString<RequestPacket>(this)
-
-fun String.asResponseOrNull(): ResponsePacket? =
-  runCatching { JsonConfig.decodeFromString<ResponsePacket>(this) }.getOrNull()

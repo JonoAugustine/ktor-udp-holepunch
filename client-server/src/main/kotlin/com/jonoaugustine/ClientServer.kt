@@ -2,47 +2,51 @@ package com.jonoaugustine
 
 import com.jonoaugustine.common.*
 import io.ktor.network.selector.SelectorManager
-import io.ktor.network.sockets.BoundDatagramSocket
-import io.ktor.network.sockets.Datagram
 import io.ktor.network.sockets.aSocket
-import io.ktor.utils.io.core.ByteReadPacket
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.encodeToString
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
-suspend fun main() = runBlocking {
-  val selectorManager = SelectorManager(Dispatchers.IO)
-  val clientHostSocket = aSocket(selectorManager).udp().bind()
+val selectorManager = SelectorManager(Dispatchers.IO)
+val hostSocket = aSocket(selectorManager).udp()
+  .bind(Address.local(6000).inet)
+lateinit var group: PlayerGroup
 
-  createGroup(clientHostSocket, Address.relayServerAddress)
-  var group: PlayerGroup? = null
+suspend fun main() = coroutineScope {
+  /** Sends the [CreatePacket] request to the relay server */
+  /** Sends the [CreatePacket] request to the relay server */
+  hostSocket.send(CreatePacket, Address.RelayServerRemote)
 
-  clientHostSocket.incoming.consumeEach { datagram ->
-    println("incoming datagram from ${datagram.address}")
-    val text = datagram.packet.textOrNull()
-    when (val packet = text?.toPacketOrNull()) {
-      is ChatMessage -> {
-        println(packet.value)
-        group?.replicate(packet, clientHostSocket)
+  launch(Dispatchers.IO) {
+    hostSocket.incoming.consumeEach { datagram ->
+      println("incoming datagram from ${datagram.address}")
+      val text = datagram.packet.textOrNull()
+      when (val packet = text?.toPacketOrNull()) {
+        is GroupPacket -> {
+          group = packet.group
+          println(group)
+          with(hostSocket) { group.sendToClients(packet) }
+        }
+
+        is ChatMessage -> {
+          println("chat message: ${packet.value}")
+          with(hostSocket) { group.sendToClients(packet) }
+        }
+
+        null           -> println("Null packet type $text")
+        else           -> println("${packet::class.simpleName} is unhandled")
       }
+    }
+  }
 
-      is GroupPacket -> {
-        group = packet.group
-        println(group)
-      }
+  while (true) {
+    val line = readlnOrNull() ?: continue
 
-      null           -> println("Null packet type $text")
-      else           -> println("${packet::class.simpleName} should never be sent to this client")
+    when (line.trim()) {
+      "exit" -> break
+      ""     -> println("ignored")
+      else   -> with(hostSocket) { group.sendToHost(ChatMessage(line.trim())) }
     }
   }
 }
-
-/**
- * Sends the [CreatePacket] request to the given [holePunchSocket]
- */
-suspend fun createGroup(holePunchSocket: BoundDatagramSocket, address: Address) =
-  JsonConfig.encodeToString<RequestPacket>(CreatePacket)
-    .run { ByteReadPacket(toByteArray()) }
-    .let { Datagram(it, address.inet) }
-    .let { holePunchSocket.send(it) }

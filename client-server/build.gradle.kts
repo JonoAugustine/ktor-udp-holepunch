@@ -9,7 +9,7 @@ plugins {
 }
 
 application {
-  mainClass.set("com.jonoaugustine.ClientKt")
+  mainClass.set("com.jonoaugustine.ClientServerKt")
 
   val isDevelopment: Boolean = project.ext.has("development")
   applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
